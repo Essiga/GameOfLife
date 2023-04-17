@@ -1,31 +1,127 @@
 import pygame
 import pygame_menu
 import numpy as np
+import tkinter
+import tkinter.filedialog
+from datetime import datetime
 
-# WINDOW_HEIGHT = 720
-# WINDOW_WIDTH = 720
-# SCREEN = pygame.display.set_mode((720, 720))
 # Define settings
 WIDTH, HEIGHT = 500, 500
 CELL_SIZE = 20
 ROWS, COLS = 25, 25
-SPEED = 20
-CYCLE_COUNT = 0
-MAX_CYCLE = None
-
+SPEED = 50
+OLD_GRID = np.zeros((ROWS, COLS))
 BG_COLOR = (128, 128, 128)
-LIVE_COLOR = (255, 0, 0)
+LIVE_COLOR = (232, 129, 232)
 DEAD_COLOR = (255, 255, 255)
-
+MENU_ACTIVE = True
 # Initialize the Pygame library and set up the screen
 pygame.init()
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 
+def set_pause_state(value):
+    global PAUSE_STATE
+    PAUSE_STATE = value
+
+
+def set_menu_active_state(value):
+    global MENU_ACTIVE
+    MENU_ACTIVE = value
+
+
+def set_old_grid(grid):
+    global OLD_GRID
+    OLD_GRID = grid.copy()
+
+
+def set_delay(value):
+    global SPEED
+    SPEED = value
+
+
 def main():
-    open_main_menu()
+    while True:
+        if MENU_ACTIVE:
+            open_main_menu()
+        else:
+            game_loop()
 
     pygame.quit()
+
+
+def get_world_state(grid):
+    if grid.sum() == 0:
+        font = pygame.font.SysFont(None, 24)
+        display = font.render('Dead World', True, (230, 0, 0))
+
+    elif (OLD_GRID == grid).all():
+        font = pygame.font.SysFont(None, 24)
+        display = font.render('Static World', True, (230, 230, 0))
+    else:
+        font = pygame.font.SysFont(None, 24)
+        display = font.render('Growing World', True, (0, 230, 0))
+    SCREEN.blit(display, (360, 520))
+
+
+def game_loop(grid):
+    running = True
+
+    while running:
+
+        SCREEN.fill(pygame.Color("#282828"))
+        font = pygame.font.SysFont(None, 24)
+        display = font.render('Press SPACE to pause/edit', True, (230, 230, 0))
+        SCREEN.blit(display, (20, 520))
+        set_old_grid(grid)
+        grid = game_of_life(grid)
+        get_world_state(grid)
+        set_pause_state(False)
+
+        draw_grid(grid)
+        pygame.display.flip()
+        clock = pygame.time.Clock()
+        state = pygame.key.get_pressed()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif state[pygame.K_ESCAPE]:
+
+                open_pause_menu(grid)
+            # elif state[pygame.K_SPACE] and PAUSE_STATE is False:
+            elif state[pygame.K_SPACE]:
+                set_pause_state(True)
+                return grid
+        clock.tick(SPEED)
+
+
+def game_of_life(grid):
+    new_grid = grid.copy()
+    for row_index in range(ROWS):
+        for col_index in range(COLS):
+            alive_neighbors = count_alive_neighbors(grid, row_index, col_index)
+            current_cell = grid[row_index, col_index]
+            if (current_cell == 1 and (alive_neighbors < 2 or alive_neighbors > 3)):
+                new_grid[row_index, col_index] = 0
+            elif (current_cell == 0 and alive_neighbors == 3):
+                new_grid[row_index, col_index] = 1
+
+    return new_grid
+
+
+def count_alive_neighbors(grid, row, col):
+    num_rows, num_cols = grid.shape
+    return sum([
+        grid[(row - 1) % num_rows, (col - 1) % num_cols],
+        grid[(row - 1) % num_rows, col],
+        grid[(row - 1) % num_rows, (col + 1) % num_cols],
+        grid[row, (col - 1) % num_cols],
+        grid[row, (col + 1) % num_cols],
+        grid[(row + 1) % num_rows, (col - 1) % num_cols],
+        grid[(row + 1) % num_rows, col],
+        grid[(row + 1) % num_rows, (col + 1) % num_cols],
+    ])
 
 
 def edit_grid(grid=None):
@@ -39,10 +135,10 @@ def edit_grid(grid=None):
 
     while running:
 
-        SCREEN.fill(pygame.Color("#282828"))
+        SCREEN.fill(pygame.Color("#585858"))
 
         font = pygame.font.SysFont(None, 24)
-        start_display = font.render('Press SPACE to start', True, (255, 0, 0))
+        start_display = font.render('Press SPACE to start', True, (0, 230, 0))
 
         rects = draw_grid(grid)
         SCREEN.blit(start_display, (20, 520))
@@ -56,36 +152,42 @@ def edit_grid(grid=None):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 grid = handle_mouse_click(grid)
             elif state[pygame.K_SPACE]:
-                print("space pressed :)))))")
+                grid = game_loop(grid)
             elif state[pygame.K_ESCAPE]:
-                open_pause_menu()
+                open_pause_menu(grid)
 
 
-def open_pause_menu():
+def open_pause_menu(grid):
     screen = pygame.display.set_mode((500, 550))
-
     pause_menu = pygame_menu.Menu(title='Paused', theme=pygame_menu.themes.THEME_DARK, height=550, width=500)
-    pause_menu.add.button("Resume")
+    pause_menu.add.range_slider('Speed', SPEED, (10, 100), 1, onchange=set_delay, value_format=lambda x: str(int(x)))
+    pause_menu.add.button("Resume", edit_grid, grid)
+    pause_menu.add.button("Save", save, grid)
+    pause_menu.add.button("Load", load)
     pause_menu.mainloop(screen)
 
 
+def load():
+    top = tkinter.Tk()
+    top.withdraw()
+    file_name = tkinter.filedialog.askopenfilename(parent=top)
+    if file_name == "":
+        open_main_menu()
+    top.destroy()
+    grid = np.load(file_name)
+    edit_grid(grid)
+
+
+def save(grid):
+    file_name = datetime.now().strftime("GameOfLife_%d%m%y_%H%M")
+    np.save(file_name, grid)
+
 
 def open_main_menu():
-    screen = pygame.display.set_mode((500, 500))
-    global CYCLE_COUNT
-    CYCLE_COUNT = 0
-
-    freeplay_menu = pygame_menu.Menu(title='Settings', theme=pygame_menu.themes.THEME_DARK, height=500, width=500)
-    # freeplay_menu.add.range_slider('Speed', SPEED, (1, 100), 1, onchange=set_delay, value_format=lambda x: str(int(x)))
-    # freeplay_menu.add.text_input('Cell Size: ', default=str(CELL_SIZE), input_type=pygame_menu.locals.INPUT_INT, onchange=set_cell_size)
-    # freeplay_menu.add.text_input('Rows: ', default=str(ROWS), input_type=pygame_menu.locals.INPUT_INT, onchange=set_rows)
-    # freeplay_menu.add.text_input('Columns: ', default=str(COLS), input_type=pygame_menu.locals.INPUT_INT,onchange=set_cols)
-    freeplay_menu.add.button('Play', edit_grid)
-
+    screen = pygame.display.set_mode((500, 550))
     main_menu = pygame_menu.Menu(title='Game of Life', theme=pygame_menu.themes.THEME_DARK, height=500, width=500)
-    main_menu.add.button('Freeplay', main_menu._open, freeplay_menu)
-    # main_menu.add.button('Random', open_random_menu, main_menu)
-    # main_menu.add.button('Load', load_game)
+    main_menu.add.button('Play', edit_grid)
+    main_menu.add.button("Load", load)
     main_menu.add.button('Quit', pygame_menu.events.EXIT)
 
     main_menu.mainloop(screen)
@@ -105,19 +207,6 @@ def draw_grid(grid):
 
 
 def handle_mouse_click(grid):
-    """
-    Returns new grid after handling a mouse click event, which toggles the state of the cell clicked on.
-
-    Parameter
-    ---------
-    grid : ndarray
-        2D array containing all individual cells.
-
-    Returns
-    -------
-    ndarray
-        Changed grid.
-    """
     mouse_pos = pygame.mouse.get_pos()
     col = mouse_pos[1] // CELL_SIZE
     row = mouse_pos[0] // CELL_SIZE
