@@ -5,29 +5,15 @@ import tkinter
 import tkinter.filedialog
 from datetime import datetime
 
-# Define settings
 WIDTH, HEIGHT = 500, 500
 CELL_SIZE = 20
 ROWS, COLS = 25, 25
 SPEED = 50
 OLD_GRID = np.zeros((ROWS, COLS))
-BG_COLOR = (128, 128, 128)
 LIVE_COLOR = (232, 129, 232)
 DEAD_COLOR = (255, 255, 255)
-MENU_ACTIVE = True
-# Initialize the Pygame library and set up the screen
 pygame.init()
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
-
-
-def set_pause_state(value):
-    global PAUSE_STATE
-    PAUSE_STATE = value
-
-
-def set_menu_active_state(value):
-    global MENU_ACTIVE
-    MENU_ACTIVE = value
 
 
 def set_old_grid(grid):
@@ -41,12 +27,7 @@ def set_delay(value):
 
 
 def main():
-    while True:
-        if MENU_ACTIVE:
-            open_main_menu()
-        else:
-            game_loop()
-
+    open_main_menu()
     pygame.quit()
 
 
@@ -76,7 +57,6 @@ def game_loop(grid):
         set_old_grid(grid)
         grid = game_of_life(grid)
         get_world_state(grid)
-        set_pause_state(False)
 
         draw_grid(grid)
         pygame.display.flip()
@@ -89,9 +69,7 @@ def game_loop(grid):
             elif state[pygame.K_ESCAPE]:
 
                 open_pause_menu(grid)
-            # elif state[pygame.K_SPACE] and PAUSE_STATE is False:
             elif state[pygame.K_SPACE]:
-                set_pause_state(True)
                 return grid
         clock.tick(SPEED)
 
@@ -102,9 +80,9 @@ def game_of_life(grid):
         for col_index in range(COLS):
             alive_neighbors = count_alive_neighbors(grid, row_index, col_index)
             current_cell = grid[row_index, col_index]
-            if (current_cell == 1 and (alive_neighbors < 2 or alive_neighbors > 3)):
+            if current_cell == 1 and (alive_neighbors < 2 or alive_neighbors > 3):
                 new_grid[row_index, col_index] = 0
-            elif (current_cell == 0 and alive_neighbors == 3):
+            elif current_cell == 0 and alive_neighbors == 3:
                 new_grid[row_index, col_index] = 1
 
     return new_grid
@@ -125,9 +103,6 @@ def count_alive_neighbors(grid, row, col):
 
 
 def edit_grid(grid=None):
-    clock = pygame.time.Clock
-    screen = pygame.display.set_mode((500, 550))
-
     if grid is None:
         grid = np.zeros((ROWS, COLS))
 
@@ -140,7 +115,7 @@ def edit_grid(grid=None):
         font = pygame.font.SysFont(None, 24)
         start_display = font.render('Press SPACE to start', True, (0, 230, 0))
 
-        rects = draw_grid(grid)
+        draw_grid(grid)
         SCREEN.blit(start_display, (20, 520))
         pygame.display.flip()
 
@@ -185,7 +160,7 @@ def save(grid):
 
 def open_main_menu():
     screen = pygame.display.set_mode((500, 550))
-    main_menu = pygame_menu.Menu(title='Game of Life', theme=pygame_menu.themes.THEME_DARK, height=500, width=500)
+    main_menu = pygame_menu.Menu(title='Game of Life', theme=pygame_menu.themes.THEME_DARK, height=550, width=500)
     main_menu.add.button('Play', edit_grid)
     main_menu.add.button("Load", load)
     main_menu.add.button('Quit', pygame_menu.events.EXIT)
